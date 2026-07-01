@@ -1,0 +1,60 @@
+# ============================================================
+# YouTube Intelligence Engine — dependencies
+# Python 3.10+
+# ============================================================
+
+# ---------- RAG app: UI, orchestration, LLM ----------
+streamlit>=1.39            # archive styling relies on the st-key-* CSS classes (>=1.39)
+langgraph                  # multi-agent state machine
+dspy                       # LLM signatures / prompting (provides the `dspy` module)
+langchain-community        # FAISS vector store integration
+langchain-ollama           # ChatOllama + OllamaEmbeddings
+langchain-openai           # OpenAI embeddings
+langchain-text-splitters   # RecursiveCharacterTextSplitter
+python-dotenv              # .env loading
+mlflow                     # optional experiment tracking
+
+# ---------- Vector stores & retrieval ----------
+weaviate-client            # Weaviate (script / textbook / comments collections)
+faiss-cpu                  # local FAISS store for script chunks
+sentence-transformers      # CrossEncoder re-ranking (ms-marco-MiniLM-L6-v2)
+
+# ---------- Ingestion / chunking ----------
+unstructured[pdf]          # partition_pdf (hi_res) for the screenplay + textbook PDFs
+wikipedia-api              # Wikipedia summary extraction
+nltk                       # sentence tokenization (punkt)
+
+# ---------- Data handling ----------
+pandas
+tqdm
+numpy
+
+# NOTE: generation and local embeddings run through Ollama, not pip.
+# Install Ollama separately and pull the models:
+#   ollama pull qwen3:8b
+#   ollama pull embeddinggemma
+#   ollama pull llama3.2
+
+# ============================================================
+# Notebook / offline NLP analysis (optional — for regenerating data)
+# Not required to run the RAG app; the processed outputs are committed.
+# ============================================================
+openai                          # YouTube comment translation / helpers
+google-api-python-client        # YouTube Data API v3 (comment scraping)
+langdetect                      # language detection
+lingua-language-detector        # language detection
+spacy                           # NER (also run: python -m spacy download en_core_web_lg)
+transformers                    # RoBERTa sentiment models
+tweetnlp                        # cardiffnlp twitter-roberta sentiment
+vaderSentiment                  # lexicon sentiment baseline
+scikit-learn                    # metrics / comparisons
+matplotlib                      # EDA plots
+seaborn                         # EDA plots
+wordcloud                       # EDA word clouds
+
+# ------------------------------------------------------------
+# PyABSA (Aspect-Based Sentiment Analysis) is intentionally NOT listed here.
+# It pins transformers<4.30, which conflicts with the versions above.
+# Install it in a SEPARATE virtual environment:
+#   pip install pyabsa
+# ------------------------------------------------------------
