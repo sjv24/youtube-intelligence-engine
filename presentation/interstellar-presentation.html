@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interstellar RAG · Multi-Agent Constellation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --void:#04060c;
+  --panel-solid:#0d1322;
+  --line:#1c2742;
+  --line-soft:#141b2c;
+  --gold:#cf9f57;
+  --gold-bright:#e8b86d;
+  --amber-dim:#8a6a3a;
+  --ice:#cfe0ff;
+  --text:#e8ebf3;
+  --muted:#8b93a8;
+  --muted-2:#5c6478;
+  --danger:#c6694f;
+  --space-1:8px; --space-2:14px; --space-3:22px; --space-4:34px; --space-5:54px; --space-6:84px;
+}
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+html,body{margin:0;padding:0;background:var(--void);}
+body{font-family:'Inter',sans-serif;color:var(--text);position:relative;min-height:100vh;}
+.mono{font-family:'JetBrains Mono',monospace;}
+.display{font-family:'Oswald',sans-serif;letter-spacing:.04em;}
+
+/* ---------- starfield (fixed, behind everything, non-interactive) ---------- */
+#stars,#dust{position:fixed;inset:0;z-index:0;pointer-events:none;}
+#dust{mix-blend-mode:screen;opacity:.5;z-index:1;}
+
+#app{position:relative;z-index:5;}
+
+/* ===================== TOP NAV ===================== */
+#navbar{
+  position:sticky;top:0;left:0;right:0;z-index:100;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 36px;
+  border-bottom:1px solid var(--line);
+  background:rgba(5,8,15,.86);
+  backdrop-filter:blur(10px);
+}
+#navbar.hidden{display:none;}
+#navbar .brand{
+  display:flex;align-items:center;gap:10px;
+  font-family:'Oswald',sans-serif;font-size:13px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--gold-bright);cursor:pointer;background:none;border:none;padding:0;
+}
+#navbar .brand .dot{width:7px;height:7px;border-radius:50%;background:var(--gold-bright);box-shadow:0 0 10px var(--gold-bright);}
+#navlinks{display:flex;gap:4px;flex-wrap:wrap;}
+.navlink{
+  font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--muted);background:transparent;border:1px solid transparent;
+  padding:9px 14px;cursor:pointer;border-radius:2px;transition:all .2s ease;
+  display:inline-block;
+}
+.navlink:hover{color:var(--ice);border-color:var(--line);background:rgba(255,255,255,.02);}
+.navlink.active{color:var(--gold-bright);border-color:var(--amber-dim);background:rgba(207,159,87,.08);}
+#navbar .sysclock{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted-2);letter-spacing:.05em;white-space:nowrap;}
+
+/* ===================== SECTION SHELL ===================== */
+.screen{display:none;width:100%;}
+.screen.active{display:block;}
+.screen-body{
+  max-width:1180px;margin:0 auto;
+  padding: var(--space-6) 40px var(--space-6);
+}
+#screen-arch .screen-body, #screen-youtube .screen-body{max-width:1320px;}
+
+.eyebrow{
+  font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.25em;
+  color:var(--gold);text-transform:uppercase;margin:0 0 var(--space-2);display:flex;align-items:center;gap:10px;
+}
+.eyebrow::before{content:'';width:24px;height:1px;background:var(--gold);display:inline-block;}
+
+h1.title{font-size:clamp(34px,5vw,60px);font-weight:600;margin:0 0 var(--space-2);line-height:1.05;}
+.subtitle{
+  font-family:'JetBrains Mono',monospace;font-size:13px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--gold-bright);margin:0 0 var(--space-4);padding-top:var(--space-2);
+  border-top:1px solid var(--line-soft);display:inline-block;
+}
+h2.section-title{font-size:clamp(24px,3vw,36px);font-weight:500;margin:0 0 var(--space-2);}
+p.lede{color:var(--muted);font-size:16px;line-height:1.75;max-width:680px;font-weight:300;margin:0 0 var(--space-4);}
+
+.section-header{margin-bottom:var(--space-5);}
+
+/* ===================== INTRO ===================== */
+#screen-intro .screen-body{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;min-height:100vh;padding-top:var(--space-6);padding-bottom:var(--space-6);}
+.intro-ring{position:relative;width:120px;height:120px;margin-bottom:var(--space-4);}
+.intro-ring svg{width:100%;height:100%;animation:spin 40s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.intro-ring .core{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;}
+.intro-ring .core .pt{width:10px;height:10px;border-radius:50%;background:var(--gold-bright);box-shadow:0 0 18px 4px rgba(232,184,109,.6);}
+
+#screen-intro .eyebrow{justify-content:center;}
+#screen-intro .eyebrow::before{display:none;}
+#screen-intro h1.title{max-width:920px;}
+#screen-intro h1.title .accent{color:var(--gold-bright);font-style:normal;}
+#screen-intro p.lede{max-width:560px;margin:var(--space-2) auto var(--space-5);}
+
+.crew{display:flex;gap:var(--space-3);flex-wrap:wrap;justify-content:center;margin-bottom:var(--space-5);}
+.crew-card{border:1px solid var(--line);padding:16px 22px;min-width:200px;text-align:left;background:rgba(12,18,32,.5);position:relative;}
+.crew-card::before{content:'';position:absolute;top:0;left:0;width:18px;height:1px;background:var(--gold);}
+.crew-card .name{font-family:'Oswald',sans-serif;font-size:15px;letter-spacing:.03em;color:var(--text);}
+.crew-card .id{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted-2);margin-top:4px;}
+
+.enter-btn{
+  font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--void);background:var(--gold-bright);border:none;padding:15px 38px;cursor:pointer;
+  box-shadow:0 0 24px rgba(232,184,109,.25);transition:all .3s ease;
+}
+.enter-btn:hover{box-shadow:0 0 36px rgba(232,184,109,.5);transform:translateY(-1px);}
+
+/* ===================== CONNECTOR LINES (decorative, flow layout) ===================== */
+.connector{display:flex;justify-content:center;margin:0 auto;}
+.connector svg{display:block;}
+.connector-v{height:54px;width:2px;margin:0 auto;position:relative;}
+.connector-v::before{
+  content:'';position:absolute;left:50%;top:0;bottom:0;width:1px;transform:translateX(-50%);
+  background:linear-gradient(180deg, var(--amber-dim), var(--gold-bright));
+}
+.connector-v::after{
+  content:'';position:absolute;left:50%;bottom:-3px;width:6px;height:6px;border-radius:50%;transform:translateX(-50%);
+  background:var(--gold-bright);box-shadow:0 0 8px var(--gold-bright);
+}
+
+/* ===================== CARD / NODE SYSTEM ===================== */
+.row-cards{display:flex;gap:var(--space-4);flex-wrap:wrap;justify-content:center;}
+.node-card{
+  border:1px solid var(--line);background:rgba(10,14,24,.6);
+  padding:var(--space-3) var(--space-3);cursor:pointer;
+  transition:transform .25s ease, box-shadow .25s ease, border-color .25s ease;
+  position:relative;
+}
+.node-card:hover{transform:translateY(-3px);}
+.node-card:focus-visible{outline:1px solid var(--gold-bright);outline-offset:3px;}
+.node-card .nring{position:absolute;width:6px;height:6px;border-radius:50%;top:14px;right:14px;background:var(--gold);box-shadow:0 0 8px var(--gold);}
+.node-card .glyph{font-size:22px;color:var(--gold-bright);margin-bottom:10px;display:block;}
+.node-card .nlabel{font-family:'Oswald',sans-serif;font-size:16px;letter-spacing:.02em;color:var(--text);}
+.node-card .ntype{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted-2);letter-spacing:.07em;text-transform:uppercase;margin-top:6px;}
+.node-card .ndesc{font-size:13px;color:var(--muted);line-height:1.6;margin-top:10px;font-weight:300;}
+
+.node-card.source{width:260px;border-color:rgba(207,159,87,.35);padding:var(--space-4);}
+.node-card.source:hover{border-color:var(--gold-bright);box-shadow:0 0 26px rgba(232,184,109,.14);}
+
+.node-card.hub{
+  width:280px;text-align:center;margin:0 auto;border-radius:50%;height:280px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  border:1px solid rgba(232,184,109,.55);
+  background:radial-gradient(circle at 50% 38%, rgba(232,184,109,.10), rgba(10,14,24,.85) 72%);
+  box-shadow:0 0 60px rgba(232,184,109,.13), inset 0 0 30px rgba(232,184,109,.08);
+}
+.node-card.hub .nlabel{font-size:19px;}
+.node-card.hub:hover{box-shadow:0 0 80px rgba(232,184,109,.22), inset 0 0 30px rgba(232,184,109,.1);}
+
+.stage-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-3);max-width:920px;margin:0 auto;}
+@media(max-width:860px){.stage-grid{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:560px){.stage-grid{grid-template-columns:1fr;}}
+.node-card.stage{border-color:rgba(232,184,109,.28);text-align:center;}
+.node-card.stage .nidx{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--gold);letter-spacing:.1em;display:block;margin-bottom:8px;}
+.node-card.stage:hover{border-color:var(--gold-bright);}
+
+.node-card.dim{opacity:.4;}
+
+/* ===================== ARCHITECTURE SCREEN STRUCTURE ===================== */
+.arch-block{margin-bottom:var(--space-5);}
+.arch-block-label{
+  text-align:center;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--muted-2);margin-bottom:var(--space-3);
+}
+
+/* ===================== YOUTUBE SUBSCREEN ===================== */
+.back-btn{
+  font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--gold-bright);background:transparent;border:1px solid rgba(232,184,109,.4);padding:9px 16px;cursor:pointer;
+  margin-bottom:var(--space-4);
+}
+.back-btn:hover{background:rgba(232,184,109,.08);}
+
+/* ===================== MODAL ===================== */
+#modal-overlay{
+  position:fixed;inset:0;z-index:200;background:rgba(3,5,10,.84);backdrop-filter:blur(4px);
+  display:none;align-items:flex-start;justify-content:center;padding:60px 40px;overflow-y:auto;
+}
+#modal-overlay.active{display:flex;}
+#modal{
+  width:min(740px,100%);
+  background:var(--panel-solid);border:1px solid var(--line);position:relative;
+  box-shadow:0 0 80px rgba(0,0,0,.6);
+  animation:modalIn .28s ease;
+}
+@keyframes modalIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+#modal::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg, transparent, var(--gold-bright), transparent);}
+#modal .modal-head{padding:30px 36px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel-solid);z-index:2;}
+#modal .modal-body{padding:26px 36px 36px;}
+#modal .modal-close{
+  position:absolute;top:22px;right:26px;background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;
+  width:30px;height:30px;line-height:28px;
+}
+#modal .modal-close:hover{color:var(--gold-bright);}
+#modal h3{font-family:'Oswald',sans-serif;font-weight:500;font-size:24px;margin:0 0 6px;}
+#modal .modal-eyebrow{font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);}
+
+.modal-lede{font-size:14.5px;color:var(--muted);line-height:1.8;font-weight:300;margin:0 0 18px;}
+
+.blocklist{list-style:none;margin:0 0 18px;padding:0;}
+.blocklist li{padding:12px 0 12px 22px;border-bottom:1px solid var(--line);position:relative;font-size:14.5px;color:var(--text);font-weight:300;line-height:1.55;}
+.blocklist li:last-child{border-bottom:none;}
+.blocklist li::before{content:'';position:absolute;left:0;top:19px;width:7px;height:1px;background:var(--gold);}
+.blocklist li b{color:var(--gold-bright);font-weight:500;}
+.blocklist li .tag{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--muted-2);text-transform:uppercase;letter-spacing:.06em;display:block;margin-top:3px;}
+
+.placeholder-box{
+  border:1px dashed var(--amber-dim);padding:16px 18px;margin-top:14px;color:var(--muted);
+  font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.6;background:rgba(207,159,87,.04);
+}
+.placeholder-box b{color:var(--gold-bright);}
+
+/* ----- image placeholder custom element ----- */
+image-placeholder{display:block;margin:16px 0;}
+.imgph-wrap{width:100%;border:1px solid var(--line);background:rgba(255,255,255,.015);overflow:hidden;}
+.imgph-wrap img{display:block;width:100%;height:auto;max-width:100%;}
+.imgph-empty{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+  padding:34px 18px;color:var(--muted-2);font-family:'JetBrains Mono',monospace;font-size:11px;text-align:center;
+  border:1px dashed var(--line);background:rgba(255,255,255,.012);
+}
+.imgph-empty .ic{font-size:22px;color:var(--amber-dim);}
+.imgph-caption{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted-2);text-align:center;padding:8px 4px 0;}
+
+/* ===================== GENERIC CONTENT SCREENS ===================== */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);margin-top:var(--space-4);}
+@media(max-width:900px){.grid2{grid-template-columns:1fr;}}
+
+.card{border:1px solid var(--line);padding:var(--space-3) var(--space-3);background:rgba(12,18,32,.4);}
+.card h4{font-family:'Oswald',sans-serif;font-weight:500;font-size:16px;color:var(--gold-bright);margin:0 0 12px;}
+.card p.cdesc{font-size:13.5px;color:var(--muted);line-height:1.75;font-weight:300;margin:0 0 10px;}
+.card ul{margin:0;padding-left:18px;color:var(--muted);font-size:13.5px;line-height:1.8;font-weight:300;}
+.card ul li::marker{color:var(--gold);}
+
+.compare-wrap{margin-top:var(--space-4);max-width:880px;}
+.toggle-row{display:flex;gap:0;border:1px solid var(--line);width:fit-content;margin-bottom:var(--space-3);}
+.toggle-btn{font-family:'JetBrains Mono',monospace;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;background:transparent;border:none;color:var(--muted);padding:12px 22px;cursor:pointer;border-right:1px solid var(--line);}
+.toggle-btn:last-child{border-right:none;}
+.toggle-btn.active{background:var(--gold-bright);color:var(--void);}
+.compare-q{font-family:'Oswald',sans-serif;font-size:18px;color:var(--ice);margin-bottom:var(--space-3);}
+.compare-panel{display:none;border:1px solid var(--line);padding:26px 28px;background:rgba(10,14,24,.6);position:relative;}
+.compare-panel.active{display:block;}
+.compare-panel.vanilla{border-color:rgba(198,105,79,.4);}
+.compare-panel.rag{border-color:rgba(232,184,109,.4);}
+.compare-panel .ctag{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:12px;display:block;}
+.compare-panel.vanilla .ctag{color:var(--danger);}
+.compare-panel.rag .ctag{color:var(--gold-bright);}
+.compare-panel p{font-size:14.5px;line-height:1.8;color:var(--text);font-weight:300;margin:0;}
+.compare-panel .src-row{margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;}
+.src-pill{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--gold);border:1px solid var(--amber-dim);padding:4px 10px;}
+
+footer.scope-footer{margin-top:var(--space-5);padding-top:20px;border-top:1px solid var(--line);font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted-2);}
+
+@media (max-width:760px){
+  #navlinks{gap:2px;}
+  .navlink{padding:7px 9px;font-size:9.5px;}
+  .screen-body{padding:var(--space-5) 18px var(--space-5);}
+  .node-card.source{width:100%;}
+  .node-card.hub{width:220px;height:220px;}
+}
+</style>
+</head>
+<body>
+
+<canvas id="stars"></canvas>
+<canvas id="dust"></canvas>
+
+<div id="app">
+
+  <!-- ============ NAV ============ -->
+  <div id="navbar" class="hidden">
+    <button class="brand display" onclick="goScreen('intro')"><span class="dot"></span> INTERSTELLAR RAG</button>
+    <div id="navlinks">
+      <button class="navlink mono" data-s="arch" onclick="goScreen('arch')">Architecture Overview</button>
+      <button class="navlink mono" data-s="problem" onclick="goScreen('problem')">Problem Statement</button>
+      <button class="navlink mono" data-s="compare" onclick="goScreen('compare')">RAG vs LLM</button>
+      <button class="navlink mono" data-s="challenges" onclick="goScreen('challenges')">Challenges</button>
+      <button class="navlink mono" data-s="stack" onclick="goScreen('stack')">Tech Stack</button>
+      <button class="navlink mono" data-s="future" onclick="goScreen('future')">Future Improvements</button>
+    </div>
+    <div class="sysclock mono" id="sysclock">SYS · NOMINAL</div>
+  </div>
+
+  <!-- ============ INTRO SCREEN ============ -->
+  <section class="screen active" id="screen-intro">
+    <div class="screen-body">
+      <div class="intro-ring">
+        <svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="56" fill="none" stroke="rgba(232,184,109,.35)" stroke-width="1" stroke-dasharray="2 6"/><circle cx="60" cy="60" r="40" fill="none" stroke="rgba(232,184,109,.5)" stroke-width="1"/></svg>
+        <div class="core"><div class="pt"></div></div>
+      </div>
+      <div class="eyebrow mono">Mission Brief · RAG-001</div>
+      <h1 class="title display">Interstellar RAG<br><em class="accent">Multi-Agent System</em></h1>
+      <p class="lede">A retrieval-augmented generation pipeline built across three orbiting data sources- the screenplay, the companion science textbook, and the public conversation around the film - fused through a multi-agent core into grounded answers.</p>
+
+      <div class="crew">
+        <div class="crew-card"><div class="name display">Saarthak Jadhav</div><div class="id mono">ID 8887524</div></div>
+        <div class="crew-card"><div class="name display">Mohammed Hami Asif Khatri</div><div class="id mono">ID 8893366</div></div>
+        <div class="crew-card"><div class="name display">Aydin Vengat</div><div class="id mono">ID 8892283</div></div>
+        <div class="crew-card"><div class="name display">Rahul Joseph</div><div class="id mono">ID 8881601</div></div>
+      </div>
+
+      <button class="enter-btn mono" onclick="goScreen('arch')">Enter the System</button>
+    </div>
+  </section>
+
+  <!-- ============ ARCHITECTURE / CONSTELLATION ============ -->
+  <section class="screen" id="screen-arch">
+    <div class="screen-body">
+      <div class="section-header">
+        <div class="eyebrow mono">System Map</div>
+        <h2 class="section-title display">Architecture Overview</h2>
+        <p class="lede">Three source constellations feed a shared ingestion-to-generation core. Click any card to open its detail - sources, the core, and every pipeline stage are documented below.</p>
+      </div>
+
+      <div class="arch-block">
+        <div class="arch-block-label mono">Level 1 - Data Source Constellation</div>
+        <div class="row-cards" id="source-row"></div>
+      </div>
+
+      <div class="connector-v"></div>
+
+      <div class="arch-block">
+        <div class="arch-block-label mono">Level 2 - Central RAG Processing Core</div>
+        <div class="row-cards"><div id="hub-slot"></div></div>
+      </div>
+
+      <div class="connector-v"></div>
+
+      <div class="arch-block">
+        <div class="arch-block-label mono">Level 3 - Pipeline Stages (Shared Across All Sources)</div>
+        <div class="stage-grid" id="stage-grid"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ YOUTUBE SUB-CONSTELLATION ============ -->
+  <section class="screen" id="screen-youtube">
+    <div class="screen-body">
+      <button class="back-btn mono" onclick="goScreen('arch')">&larr; Back to Architecture</button>
+      <div class="section-header">
+        <div class="eyebrow mono">Source Branch · Pipeline 02</div>
+        <h2 class="section-title display">YouTube Comments Pipeline</h2>
+        <p class="lede">The noisiest of the three sources. Comments are scraped from top explainer videos, cleaned, explored, and scored for sentiment before being embedded back into the shared RAG core.</p>
+      </div>
+
+      <div class="row-cards" style="margin-bottom:0;"><div id="yt-origin-slot"></div></div>
+      <div class="connector-v"></div>
+
+      <div class="arch-block-label mono">Stages - In Order</div>
+      <div class="stage-grid" id="yt-stage-grid"></div>
+
+      <div class="connector-v"></div>
+      <div class="row-cards"><div id="yt-output-slot"></div></div>
+    </div>
+  </section>
+
+  <!-- ============ PROBLEM STATEMENT ============ -->
+<section class="screen" id="screen-problem">
+  <div class="screen-body">
+    <div class="section-header">
+      <div class="eyebrow mono">Mission Motivation</div>
+      <h2 class="section-title display">Sci-fi shouldn't need a second screen</h2>
+      <p class="lede">You're watching Interstellar. Cooper just delivered the message from inside the tesseract. You have a dozen questions- and your only option is to pause the film, open a browser, and hope a search result or a generic chatbot gets it right.</p>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h4>The Viewer's Problem</h4>
+        <ul>
+          <li>Great sci-fi rewards curiosity- but the moment a question hits, viewers have no grounded way to ask it without leaving the film.</li>
+          <li>Vanilla LLMs answer fluently even when they don't know, and can't distinguish a fan theory from a line actually in the script.</li>
+          <li>Fan wikis and explainer channels are the closest substitute today- unofficial, uneven in quality, and outside the filmmaker's control.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>The Creator's Problem</h4>
+        <ul>
+          <li>Studios and filmmakers have no easy, official way to help audiences go deeper on plot, science, or meaning.</li>
+          <li>Every question a confused viewer can't get answered is a viewer who disengages, or who goes looking for answers somewhere the studio doesn't control.</li>
+          <li>There's currently no product that lets a film's own creators stand behind an accurate, on-brand companion for their movie.</li>
+        </ul>
+      </div>
+      <div class="card" style="grid-column:1/-1;">
+        <h4>Why Interstellar is our proving ground</h4>
+        <ul>
+          <li><b style="color:var(--gold-bright);">Narrative source</b>- the screenplay provides dense, structured plot and dialogue.</li>
+          <li><b style="color:var(--gold-bright);">Scientific source</b>- "The Science of Interstellar" gives an authoritative reference for black holes, relativity, and wormholes covered in the film.</li>
+          <li><b style="color:var(--gold-bright);">Opinion source</b>- YouTube comments are noisy, contradictory, and emotionally charged, stress-testing retrieval and fusion against real-world conversational data.</li>
+        </ul>
+      </div>
+      <div class="card" style="grid-column:1/-1;border-color:rgba(232,184,109,.55);background:radial-gradient(circle at 0% 0%, rgba(232,184,109,.06), rgba(12,18,32,.4));">
+        <h4>THE BET WE'RE MAKING</h4>
+        <p class="cdesc" style="margin-bottom:0;">Every great sci-fi film already has an audience asking these exact questions, at scale, in the comments section, every single day. We think that audience deserves a better answer than a search engine- and that films deserve a companion that actually knows the material. Interstellar is proof it works for one movie. See where this goes next in <a href="#" onclick="goScreen('future');return false;" style="color:var(--gold-bright);">Future Improvements</a>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+  <!-- ============ COMPARISON ============ -->
+  <section class="screen" id="screen-compare">
+    <div class="screen-body">
+      <div class="section-header">
+        <div class="eyebrow mono">Side-by-Side</div>
+        <h2 class="section-title display">RAG vs. no-context LLM</h2>
+ 
+      </div><p class="lede">Same question, two answer modes.</p>
+
+      <div class="compare-wrap">
+        <div class="toggle-row">
+          <button class="toggle-btn mono active" data-p="vanilla" onclick="setCompare('vanilla')">Vanilla LLM</button>
+          <button class="toggle-btn mono" data-p="rag" onclick="setCompare('rag')">RAG-Enhanced</button>
+        </div>
+        <div class="compare-q display">"How accurate is the tesseract scene compared to real physics, and what do fans think about it?"</div>
+
+        <div class="compare-panel vanilla active" id="panel-vanilla">
+          <span class="ctag mono">No retrieval · generic knowledge</span>
+          <p>The Tesseract scene in <b>Civil War</b> is fictionalized for dramatic effect, as real physics doesn't support its portrayal of a stable wormhole. Fans generally appreci
+              ate its visual spectacle and narrative role, though some critique its scientific inaccuracy.</p>
+          <div class="src-row"><span class="src-pill mono">No citations</span><span class="src-pill mono">Generic physics recall</span></div>
+          <image-placeholder src="vanilla-llm-screenshot.png" caption="Screenshot: vanilla model output, no source panel"></image-placeholder>
+        </div>
+        <div class="compare-panel rag" id="panel-rag">
+          <span class="ctag mono">Retrieved from Textbook Agent + Script Agent</span>
+          <p>
+The tesseract scene in <b>Interstellar</b> is a creative amalgamation of theoretical physics and narrative invention, with its scientific accuracy debated across differ
+ent perspectives. From a physics standpoint, the tesseract is portrayed as a 5-dimensional hypercube enabling Cooper to transcend time by existing in a higher-dime
+nsional space. While this draws on concepts like string theory's extra dimensions and Einstein's relativity (which treats time as a dimension), the film's depictio
+n of a navigable, physical tesseract is not grounded in real science. Current physics suggests higher dimensions, if they exist, are compactified or hidden, not tr
+aversable spaces. The scene's mechanics-such as Cooper manipulating the tesseract's faces or transmitting messages via gravity-remain speculative, blending quantum
+entanglement and time dilation into a narrative device rather than rigorous scientific explanation.</p>
+<p>Fans' reactions reflect this tension between ambition and approximation. Many praise the film's effort to merge hard science with storytelling, especially the visu
+ally stunning tesseract set (which used real practical effects) and its role in resolving the plot's emotional core. However, critics and scientists note simplific
+ations or fictionalized elements, such as the tesseract's structure or the physics of higher-dimensional interaction. Some fans humorously dismiss it as overly sim
+plified ("Einstein would laugh"), while others celebrate its imaginative leap as a cultural icon of science-fantasy. Overall, the tesseract is seen as a thought-pr
+ovoking, if imperfect, bridge between scientific theory and artistic storytelling, with its legacy rooted in sparking curiosity about physics and its limits.</p>
+          <div class="src-row"><span class="src-pill mono">The Science of Interstellar</span><span class="src-pill mono">Screenplay - Tessearct scene</span><span class="src-pill mono">Multi Agent synthesis</span></div>
+          <image-placeholder src="rag-llm-screenshot.png" caption="Screenshot: RAG output with the Routed Agent"></image-placeholder>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CHALLENGES ============ -->
+  <section class="screen" id="screen-challenges">
+    <div class="screen-body">
+      <div class="section-header">
+        <div class="eyebrow mono">Flight Log</div>
+        <h2 class="section-title display">Challenges faced</h2>
+        <p class="lede">Each issue below includes the underlying cause and where we mitigated it - measured numbers are marked as placeholders for the team to fill in.</p>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <h4>Multi-source embedding mismatch</h4>
+          <p class="cdesc">Script, textbook, and comment text differ sharply in length, register, and noise level, so a single embedding space underperforms on at least one source.</p>
+        </div>
+        <div class="card">
+          <h4>Noisy YouTube comment data</h4>
+          <p class="cdesc">Sarcasm, off-topic replies, and duplicate bot comments dilute the relevant signal in the comments corpus.</p>
+        </div>
+        <div class="card">
+          <h4>Retrieval latency</h4>
+          <p class="cdesc">Multi-hop and HyDE retrieval add sequential LLM calls before generation can begin.</p>
+        </div>
+        <div class="card">
+          <h4>Hardware constraints</h4>
+          <p class="cdesc">Running Qwen3:8B and embedding models locally via Ollama is bound by available GPU memory.</p>
+        </div>
+        <div class="card" style="grid-column:1/-1;">
+          <h4>Mitigation strategies</h4>
+          <ul>
+            <li>Chunk size and overlap tuning per source type.</li>
+            <li>Hybrid (dense + sparse) retrieval to recover keyword-exact matches missed by pure semantic search.</li>
+            <li>Caching of repeated or near-duplicate queries.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TECH STACK ============ -->
+  <section class="screen" id="screen-stack">
+    <div class="screen-body">
+      <div class="section-header">
+        <div class="eyebrow mono">Onboard Systems</div>
+        <h2 class="section-title display">Tech stack summary</h2>
+        <p class="lede">Every major component in the pipeline, grouped by the role it plays in the system.</p>
+      </div>
+      <div class="grid2">
+        <div class="card"><h4>Weaviate</h4><p class="cdesc">Primary vector database for indexed chunks across sources.</p></div>
+        <div class="card"><h4>FAISS</h4><p class="cdesc">Local similarity search index, used for fast in-memory retrieval and threshold filtering.</p></div>
+        <div class="card"><h4>Ollama · Qwen3:8B</h4><p class="cdesc">Local generation model and local embedding backend.</p></div>
+        <div class="card"><h4>DSPy</h4><p class="cdesc">Prompt optimization layer tuning the generation step's prompts programmatically.</p></div>
+        <div class="card"><h4>LangGraph</h4><p class="cdesc">Multi-agent orchestration across Supervisor, Script, Textbook, YouTube Comments, and Fusion agents.</p></div>
+        <div class="card"><h4>OpenAI Embeddings</h4><p class="cdesc">Used specifically for the YouTube comments corpus.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FUTURE ============ -->
+  <section class="screen" id="screen-future">
+  <div class="screen-body">
+    <div class="section-header">
+      <div class="eyebrow mono">Next Trajectory</div>
+      <h2 class="section-title display">From One movie to EVERY movie</h2>
+      <p class="lede">Today, this is a single-film proof of concept, built for Interstellar. Here's where we think it goes next.</p>
+    </div>
+
+    <div class="grid2">
+      <div class="card" style="grid-column:1/-1;border-color:rgba(232,184,109,.55);">
+        <h4>Phase 1- Today: one film, proven end-to-end</h4>
+        <p class="cdesc">A working multi-agent companion for a single movie, grounded in its script, its science, and its real audience- showing the architecture, the routing, and the answer quality all hold up on a real title.</p>
+      </div>
+
+      <div class="card">
+        <h4>Phase 2 - Near-term: A Companion per film</h4>
+        <ul>
+          <li>Creators of sci-fi (and eventually any) movies come to us to build a dedicated companion bot for their own film.</li>
+          <li>Each film gets its own hosted destination- in the spirit of a dedicated site like <span class="mono" style="color:var(--gold-bright);">interstellar.com</span>- where any viewer can search up doubts or questions about the movie.</li>
+          <li>No player integration required. The film gets a stickier, more discoverable presence online, and a self-serve way to help its audience go deeper.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>Phase 3 - Long-term: Embedded in the movie player</h4>
+        <ul>
+          <li>The same companion, live inside the video player itself- ask a question the moment it occurs to you, mid-scene, without pausing or leaving the film.</li>
+          <li>Requires platform-level integration, so this is the long-range goal rather than the next release- Phase 2 is the realistic path to get there.</li>
+        </ul>
+      </div>
+
+      <div class="card" style="grid-column:1/-1;">
+        <h4>Technical roadmap alongside the product roadmap</h4>
+        <ul>
+          <li><b>Generalize the pipeline</b>- parameterize ingestion, chunking, and indexing so a new film's script, companion material, and comment corpus can be swapped in without rearchitecting the core stages.</li>
+          <li><b>Better cross-source alignment</b>- a shared or jointly-trained embedding space across script, textbook, and comments.</li>
+          <li><b>Improved reranking models</b>- a learned reranker placed after initial retrieval to sharpen final context selection.</li>
+          <li><b>Real-time comment ingestion</b>- move from a static CSV snapshot to a live-updating comment stream.</li>
+          <li><b>Better agent collaboration strategies</b>- richer negotiation between agents beyond the current Supervisor + Fusion pattern.</li>
+          <li><b>Multimodal expansion</b>- incorporate frames and stills from the film alongside text sources.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<!-- ============ MODAL ============ -->
+<div id="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div id="modal">
+    <button class="modal-close" onclick="closeModal()">&times;</button>
+    <div class="modal-head">
+      <div class="modal-eyebrow mono" id="modal-eyebrow">NODE</div>
+      <h3 class="display" id="modal-title">Title</h3>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+/* ===================== IMAGE PLACEHOLDER CUSTOM ELEMENT =====================
+   Usage in any content string:
+   <image-placeholder src="filename.png" caption="optional caption" alt="optional alt text"></image-placeholder>
+   - If the image fails to load (or no src given), a subtle placeholder box is shown instead.
+   - Always use an explicit closing tag (</image-placeholder>)- HTML5 does not
+     self-close custom elements, so "<image-placeholder ... />" alone will not work reliably.
+*/
+class ImagePlaceholder extends HTMLElement{
+  connectedCallback(){
+    const src = this.getAttribute('src') || '';
+    const alt = this.getAttribute('alt') || src || 'image';
+    const caption = this.getAttribute('caption') || '';
+    const wrap = document.createElement('div');
+    wrap.className = 'imgph-wrap';
+
+    if(src){
+      const img = document.createElement('img');
+      img.src = src;
+      img.alt = alt;
+      img.loading = 'lazy';
+      img.onerror = () => { wrap.innerHTML = emptyHTML(src); };
+      wrap.appendChild(img);
+    } else {
+      wrap.innerHTML = emptyHTML('');
+    }
+    this.innerHTML = '';
+    this.appendChild(wrap);
+    if(caption){
+      const cap = document.createElement('div');
+      cap.className = 'imgph-caption mono';
+      cap.textContent = caption;
+      this.appendChild(cap);
+    }
+    function emptyHTML(filename){
+      return `<div class="imgph-empty"><span class="ic">&#9670;</span>${filename ? 'Image not found: '+filename : 'No image attached'}<br>drop a file at this path to populate</div>`;
+    }
+  }
+}
+customElements.define('image-placeholder', ImagePlaceholder);
+
+/* ===================== STARFIELD ===================== */
+const starsCanvas=document.getElementById('stars');
+const sctx=starsCanvas.getContext('2d');
+let stars=[];
+function resizeStars(){
+  starsCanvas.width=window.innerWidth;starsCanvas.height=window.innerHeight;
+  stars=[];
+  const n=Math.floor((window.innerWidth*window.innerHeight)/3500);
+  for(let i=0;i<n;i++){
+    stars.push({x:Math.random()*starsCanvas.width,y:Math.random()*starsCanvas.height,r:Math.random()*1.3+.2,a:Math.random(),s:Math.random()*.015+.003,dir:Math.random()>.5?1:-1});
+  }
+}
+function drawStars(){
+  sctx.clearRect(0,0,starsCanvas.width,starsCanvas.height);
+  sctx.fillStyle='#04060c';
+  sctx.fillRect(0,0,starsCanvas.width,starsCanvas.height);
+  for(const st of stars){
+    st.a+=st.s*st.dir;
+    if(st.a<=.15||st.a>=1)st.dir*=-1;
+    sctx.beginPath();
+    sctx.fillStyle=`rgba(225,229,255,${st.a})`;
+    sctx.arc(st.x,st.y,st.r,0,Math.PI*2);
+    sctx.fill();
+  }
+  requestAnimationFrame(drawStars);
+}
+resizeStars();drawStars();
+window.addEventListener('resize',resizeStars);
+
+const dustCanvas=document.getElementById('dust');
+const dctx=dustCanvas.getContext('2d');
+let dust=[];
+function resizeDust(){
+  dustCanvas.width=window.innerWidth;dustCanvas.height=window.innerHeight;
+  dust=[];
+  for(let i=0;i<36;i++){
+    dust.push({x:Math.random()*dustCanvas.width,y:Math.random()*dustCanvas.height,r:Math.random()*2+.5,vx:(Math.random()-.5)*.12,vy:(Math.random()-.5)*.12,a:Math.random()*.22+.05});
+  }
+}
+function drawDust(){
+  dctx.clearRect(0,0,dustCanvas.width,dustCanvas.height);
+  for(const d of dust){
+    d.x+=d.vx;d.y+=d.vy;
+    if(d.x<0)d.x=dustCanvas.width;if(d.x>dustCanvas.width)d.x=0;
+    if(d.y<0)d.y=dustCanvas.height;if(d.y>dustCanvas.height)d.y=0;
+    dctx.beginPath();
+    dctx.fillStyle=`rgba(207,159,87,${d.a})`;
+    dctx.arc(d.x,d.y,d.r,0,Math.PI*2);
+    dctx.fill();
+  }
+  requestAnimationFrame(drawDust);
+}
+resizeDust();drawDust();
+window.addEventListener('resize',resizeDust);
+
+/* ===================== SCREEN NAV ===================== */
+function goScreen(name){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+name).classList.add('active');
+  document.getElementById('navbar').classList.toggle('hidden', name==='intro');
+  document.querySelectorAll('.navlink').forEach(b=>b.classList.toggle('active', b.dataset.s===name));
+  window.scrollTo({top:0, behavior:'instant' in window ? 'instant' : 'auto'});
+  closeModal();
+}
+
+function tickClock(){
+  document.getElementById('sysclock').textContent='SYS · '+new Date().toTimeString().slice(0,8);
+}
+setInterval(tickClock,1000);tickClock();
+
+/* ===================== MODAL CONTENT DATA ===================== */
+const CONTENT = {
+  script: {
+    eyebrow:'Source Node 01 · Narrative', title:'Movie Script',
+    body:`<p class="modal-lede">The Interstellar screenplay (PDF/text) is the structured narrative backbone of the system- it carries scene headings, dialogue, and stage direction, and is the only source with a clear, linear story order. It anchors plot and character-motivation questions to the actual text of the film rather than to fan summaries.</p>
+    <ul class="blocklist">
+      <li><b>Input format</b>- full screenplay PDF/text export.<span class="tag">structured narrative source</span></li>
+      <li><b>Feeds into</b>- Data Extraction stage of the shared RAG core, via the PDF script parsing path.</li>
+      <li><b>Owned by</b>- Script Agent at retrieval time, for plot, dialogue, and character-motivation questions.</li>
+    </ul>
+    <image-placeholder src="script-source-sample.png" caption="Screenshot: sample parsed scene from the screenplay"></image-placeholder>`
+  },
+  book: {
+    eyebrow:'Source Node 02 · Scientific Reference', title:'Companion Textbook',
+    body:`<p class="modal-lede">"The Science of Interstellar" is the authoritative scientific reference behind the film- written by physicist Kip Thorne, who consulted on the production. It supplies the technical grounding the screenplay alone can't: the actual physics of wormholes, relativistic time dilation, and Gargantua.</p>
+    <ul class="blocklist">
+      <li><b>Input format</b>- full book text, extracted for ingestion.<span class="tag">authoritative scientific reference</span></li>
+      <li><b>Feeds into</b>- Data Extraction stage via the textbook text extraction path.</li>
+      <li><b>Owned by</b>- Textbook Agent at retrieval time, for relativity, black-hole, and wormhole questions.</li>
+    </ul>
+    <image-placeholder src="textbook-source-sample.png" caption="Screenshot: sample extracted page / diagram from the textbook"></image-placeholder>`
+  },
+  hub: {
+    eyebrow:'Central Node', title:'RAG Processing Core',
+    body:`<p class="modal-lede">Every source- script, textbook, and YouTube comments- passes through the same six-stage pipeline once ingested. This is what keeps the system consistent: regardless of how different the raw inputs look, by the time they reach Embedding + Indexing they share a common shape.</p>
+    <ul class="blocklist">
+      <li><b>01- Data Extraction</b><span class="tag">turn raw files into clean text</span></li>
+      <li><b>02- Chunking</b><span class="tag">split text into retrievable units</span></li>
+      <li><b>03- Embedding + Indexing</b><span class="tag">vectorize and store chunks</span></li>
+      <li><b>04- Retrieval</b><span class="tag">find the most relevant chunks per query</span></li>
+      <li><b>05- Multi-Agent System</b><span class="tag">route and synthesize across sources</span></li>
+      <li><b>06- Generation</b><span class="tag">produce the final grounded answer</span></li>
+    </ul>`
+  },
+  extraction:{
+    eyebrow:'Core Stage 01', title:'Data Extraction',
+    body:`<p class="modal-lede">The first stage normalizes three very different file types- a PDF screenplay, a print textbook, and a scraped CSV- into plain, structured text the rest of the pipeline can work with.</p>
+    <ul class="blocklist">
+      <li><b>PDF script parsing</b><span class="tag">screenplay → structured text</span></li>
+      <li><b>Textbook text extraction</b><span class="tag">"The Science of Interstellar" → structured text</span></li>
+      <li><b>YouTube comments CSV</b><span class="tag">scraped comment dataset</span></li>
+      <li><b>Wikipedia supplement data</b><span class="tag">used if applicable, as a supporting reference</span></li>
+    </ul>
+    <image-placeholder src="data-extraction-flow.png" caption="Diagram: extraction flow per source type"></image-placeholder>`
+  },
+  chunking:{
+    eyebrow:'Core Stage 02', title:'Chunking',
+    body:`<p class="modal-lede">Different sources call for different splitting strategies- a script benefits from scene-aware boundaries, while comments are short enough to need little splitting at all.</p>
+    <ul class="blocklist">
+      <li><b>Sliding window chunking</b><span class="tag">fixed-size overlapping windows</span></li>
+      <li><b>LLM-based propositional / topic chunking</b><span class="tag">semantic, topic-aware splits</span></li>
+      <li><b>Structured document segmentation</b><span class="tag">respects scene / chapter boundaries</span></li>
+    </ul>`
+  },
+  embedding:{
+    eyebrow:'Core Stage 03', title:'Embedding + Indexing',
+    body:`<p class="modal-lede">Chunks are converted into vectors and stored for fast similarity search. The team intentionally uses two embedding backends- local for the script and textbook, hosted for comments- to balance cost and quality.</p>
+    <ul class="blocklist">
+      <li><b>Weaviate</b><span class="tag">vector database</span></li>
+      <li><b>FAISS</b><span class="tag">local similarity search index</span></li>
+      <li><b>Ollama embeddings</b><span class="tag">local embedding model</span></li>
+      <li><b>OpenAI embeddings</b><span class="tag">used specifically for YouTube comments</span></li>
+    </ul>
+    <image-placeholder src="open-ai-embedding.png" caption="Snippet: Comments getting embedded using Open AI embedding model"></image-placeholder>`
+  },
+  retrieval:{
+    eyebrow:'Core Stage 04', title:'Retrieval',
+    body:`<p class="modal-lede">At query time, the system doesn't rely on a single retrieval strategy- it layers several to cover both exact keyword matches and looser semantic ones, and to handle questions that need more than one hop of reasoning.</p>
+    <ul class="blocklist">
+      <li><b>Semantic retrieval</b></li>
+      <li><b>Hybrid retrieval</b><span class="tag">dense + sparse</span></li>
+      <li><b>Max Marginal Relevance (MMR)</b><span class="tag">diversity-aware result selection</span></li>
+      <li><b>FAISS threshold filtering</b></li>
+      <li><b>Multi-hop retrieval</b></li>
+      <li><b>HyDE</b><span class="tag">Hypothetical Document Embeddings</span></li>
+    </ul>`
+  },
+  multiagent:{
+    eyebrow:'Core Stage 05', title:'Multi-Agent System',
+    body:`<p class="modal-lede">A Supervisor agent decides which source agent(s) should answer a given query, and a Fusion agent reconciles their outputs into one coherent response- this is what lets the system answer cross-source questions like the Gargantua example in the comparison section.</p>
+    <ul class="blocklist">
+      <li><b>Supervisor agent</b><span class="tag">routes incoming queries</span></li>
+      <li><b>Script Agent</b><span class="tag">answers from the screenplay</span></li>
+      <li><b>Textbook Agent</b><span class="tag">answers from the science reference</span></li>
+      <li><b>YouTube Comments Agent</b><span class="tag">answers from audience discussion</span></li>
+      <li><b>Fusion Agent</b><span class="tag">combines multi-source outputs</span></li>
+    </ul>
+    <image-placeholder src="multi-agent-graph.png" caption="Diagram: LangGraph agent topology"></image-placeholder>`
+  },
+  generation:{
+    eyebrow:'Core Stage 06', title:'Generation',
+    body:`<p class="modal-lede">The final stage takes the Fusion agent's assembled context and produces the user-facing answer, with DSPy continuously tuning the prompts that drive this step.</p>
+    <ul class="blocklist">
+      <li><b>Qwen3:8B</b><span class="tag">served locally via Ollama</span></li>
+      <li><b>DSPy prompt optimization layer</b><span class="tag">tunes prompts programmatically</span></li>
+      <li><b>Final response synthesis</b><span class="tag">assembled answer returned to the user</span></li>
+    </ul>`
+  }
+};
+
+function openModal(key){
+  const c = CONTENT[key];
+  if(!c) return;
+  document.getElementById('modal-eyebrow').textContent = c.eyebrow;
+  document.getElementById('modal-title').textContent = c.title;
+  document.getElementById('modal-body').innerHTML = c.body;
+  document.getElementById('modal-overlay').classList.add('active');
+  document.getElementById('modal-overlay').scrollTop = 0;
+}
+function closeModal(){
+  document.getElementById('modal-overlay').classList.remove('active');
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+
+/* ===================== ARCHITECTURE CARDS (flow layout, no absolute positioning) ===================== */
+const sourceDefs = [
+  {id:'script', glyph:'&#9776;', label:'Movie Script', type:'Narrative Source', desc:'Interstellar screenplay- structured plot, dialogue, scene order.', click:"openModal('script')"},
+  {id:'youtube', glyph:'&#9658;', label:'YouTube Comments', type:'Conversational Source', desc:'Scraped comment dataset- noisy, opinion-based, real-world.', click:"goScreen('youtube')"},
+  {id:'book', glyph:'&#9737;', label:'Companion Textbook', type:'Scientific Source', desc:'"The Science of Interstellar"- authoritative physics reference.', click:"openModal('book')"},
+];
+const stageDefs = [
+  {id:'extraction', idx:'01', label:'Data Extraction', click:"openModal('extraction')"},
+  {id:'chunking', idx:'02', label:'Chunking', click:"openModal('chunking')"},
+  {id:'embedding', idx:'03', label:'Embedding + Indexing', click:"openModal('embedding')"},
+  {id:'retrieval', idx:'04', label:'Retrieval', click:"openModal('retrieval')"},
+  {id:'multiagent', idx:'05', label:'Multi-Agent System', click:"openModal('multiagent')"},
+  {id:'generation', idx:'06', label:'Generation', click:"openModal('generation')"},
+];
+
+function buildArch(){
+  const row = document.getElementById('source-row');
+  row.innerHTML = sourceDefs.map(n=>`
+    <div class="node-card source" tabindex="0" onclick="${n.click}" onkeydown="if(event.key==='Enter'){${n.click}}">
+      <div class="nring"></div>
+      <span class="glyph">${n.glyph}</span>
+      <div class="nlabel display">${n.label}</div>
+      <div class="ntype mono">${n.type}</div>
+      <div class="ndesc">${n.desc}</div>
+    </div>`).join('');
+
+  document.getElementById('hub-slot').innerHTML = `
+    <div class="node-card hub" tabindex="0" onclick="openModal('hub')" onkeydown="if(event.key==='Enter'){openModal('hub')}">
+      <div class="nlabel display">RAG Processing Core</div>
+      <div class="ntype mono">Shared Pipeline</div>
+    </div>`;
+
+  document.getElementById('stage-grid').innerHTML = stageDefs.map(n=>`
+    <div class="node-card stage" tabindex="0" onclick="${n.click}" onkeydown="if(event.key==='Enter'){${n.click}}">
+      <span class="nidx mono">${n.idx}</span>
+      <div class="nlabel display">${n.label}</div>
+    </div>`).join('');
+}
+buildArch();
+
+/* ===================== YOUTUBE SUB-PIPELINE ===================== */
+const YT_CONTENT = {
+  ingestion: {
+    eyebrow:'YouTube Pipeline · Stage 01', title:'Data Ingestion & Scraping',
+    body:`<p class="modal-lede">Before any cleaning or analysis can happen, the raw comment corpus has to be assembled. This stage runs once to produce a frozen <span class="mono">raw_data.csv</span> snapshot.</p>
+    <ul class="blocklist">
+      <li><b>Step 1</b>- Generate a list of the top 15 YouTube video IDs from searches: "interstellar ending explained", "interstellar theory", "interstellar explained", "interstellar movie analysis", "interstellar ending breakdown".</li>
+      <li><b>Step 2</b>- Remove duplicate video IDs.</li>
+      <li><b>Step 3</b>- Store unique video IDs in a list.</li>
+      <li><b>Step 4</b>- Scrape comments from each video ID.</li>
+      <li><b>Step 5</b>- Store all comments in a DataFrame.</li>
+      <li><b>Step 6</b>- Export the dataset as <span class="mono">raw_data.csv</span>.</li>
+    </ul>
+    <image-placeholder src="yt-ingestion-screenshot.jpg" caption="Screenshot: scraping script output / video ID list"></image-placeholder>`
+  },
+  eda: {
+    eyebrow:'YouTube Pipeline · Stage 02', title:'Exploratory Data Analysis',
+    body:`<p class="modal-lede">Before sentiment scoring, the team profiles the cleaned corpus- how comments are distributed across videos, how long they tend to be, and what language mix is present.</p>
+    <ul class="blocklist">
+    <li>Performed exploratory data analysis (EDA) on 54,427 YouTube comments collected from 38 Interstellar-related videos to understand engagement patterns, language distribution, and discussion themes.</li>
+    <li><b>Dataset Insight</b>- Engagement was highly skewed: while the average comment received ~20 likes, the median was 0 and the maximum exceeded 41,000 likes, showing that a very small number of comments drove most audience interaction.</li>
+    <li><b>Language Analysis</b>- Approximately 84.5% of comments were detected as English, with the remaining comments spanning multiple languages including Malayalam, Indonesian, Afrikaans, and Dutch. This supported the decision to prioritize English-focused downstream NLP processing.</li>
+    <li><b>Content Quality Findings</b>- Around 2.59% of comments were exact duplicates, primarily short generic replies, emojis, or spam-like responses. These were removed during preprocessing to improve topic modeling and retrieval quality.</li>
+    <li><b>Key Insight</b>- The most frequent words and phrases were strongly tied to Interstellar’s narrative and scientific themes, including terms like <span class="mono">time</span>, <span class="mono">planet</span>, <span class="mono">black hole</span>, <span class="mono">cooper</span>, and <span class="mono">space</span>, confirming that the dataset remained highly relevant and semantically focused.</li>
+    <li><b>Temporal Analysis</b>- Comment activity peaked sharply in March 2020, likely driven by increased streaming and rewatch activity during COVID-19 lockdowns, revealing how external global events influenced audience engagement with the film.</li>
+    </ul>
+    <image-placeholder src="comments-per-vid.jpeg" caption="Chart: Comments per Video ID"></image-placeholder>
+    <image-placeholder src="lang-di.jpeg" caption="Chart: Comments language distribution"></image-placeholder>`
+  },
+  cleaning: {
+    eyebrow:'YouTube Pipeline · Stage 03', title:'Data Cleaning',
+    body:`<p class="modal-lede">Raw scraped comments are messy- duplicate bot replies, non-English text, and off-topic spam all need to be filtered out before the corpus is usable for retrieval.</p>
+    <style>
+    .blocklist .highlight {
+        background: rgba(207, 159, 87, 0.12);
+        border-left: 3px solid var(--gold-bright);
+        padding-left: 8px;
+        color: var(--text);
+    }
+    .blocklist .highlight b {
+        color: var(--gold-bright);
+    }
+    </style>
+    <ul class="blocklist">
+      <li><b>Step 1</b>- Import core libraries (pandas, re, html) and load the raw dataset from <span class="mono">raw_data.csv</span>.</li>
+      <li><b>Step 2</b>- Inspect the dataset's structure, preview rows, and check for missing values and column types.</li>
+      <li><b>Step 3</b>- Standardize column names, drop rows with missing comments, and remove exact + duplicate text entries.</li>
+      <li><b>Step 4</b>- Clean text by decoding HTML entities, stripping URLs, collapsing extra whitespace, and trimming leading/trailing spaces.</li>
+      <li><b>Step 5</b>- Detect each comment's language using <span class="mono">lingua</span> and <span class="mono">langdetect</span>, flagging emoji-only and noise (timestamps/numbers/punctuation) entries, then drop noise/unknown rows.</li>
+      <li class="highlight"><b>Step 6</b>- Translate all non-English comments to English in batches using GPT (<span class="mono">gpt-4o-mini</span>), storing results in a new <span class="mono">translated_text</span> column while preserving the original text; drop rows where translation failed.</li>
+      <li><b>Step 7</b>- Strip leftover timestamps (e.g., "1:23") from comments using regex.</li>
+      <li class="highlight"><b>Step 8</b>- Expand contractions via <span class="mono">contractions.txt</span> (e.g., where'd → where did, isn't → is not) and expand slang/acronyms via <span class="mono">acrynom.csv</span> (excluding problematic short matches like "fi").</li>
+      <li class="highlight"><b>Step 9</b>- Use GPT to classify each comment's relevance to the movie Interstellar, flagging spam, off-topic, or context-less replies as <span class="mono">is_relevant = False</span>; drop short irrelevant comments and emoji-only entries.</li>
+      <li><b>Step 10</b>- Engineer text features: <span class="mono">char_count</span>, <span class="mono">word_count</span>, and <span class="mono">sentence_count</span> on the translated text.</li>
+      <li><b>Step 11</b>- Run final validation checks (head, info, null counts) to confirm dataset consistency and quality.</li>
+      <li><b>Step 12</b>- Reload the cleaned data, re-run language detection to catch and drop a missed language ("ml"), remove remaining nulls, then export the final dataset as <span class="mono">cleaned_comments.csv</span>.</li>
+      <li><b>Step 13</b>- Generate exploratory bar charts of the most frequent words, with and without stopwords removed, to sanity-check the cleaned text.</li>
+    </ul>
+    <image-placeholder src="yt-cleaning-after.png" caption="Screenshot: sample of comments before / after translation"></image-placeholder>
+    <image-placeholder src="yt-cleaning-acronyms.png" caption="Screenshot: before / after sample of cleaned comments"></image-placeholder>
+    <image-placeholder src="yt-cleaning-words.png" caption="Screenshot: Top 20 words from comments"></image-placeholder>`
+  },
+  sentiment: {
+    eyebrow:'YouTube Pipeline · Stage 04', title:'Sentiment Analysis',
+    body:`<p class="modal-lede">Three different sentiment approaches are compared, since lexicon-based and model-based methods can disagree sharply on sarcastic or ambiguous fan comments.</p>
+<ul class="blocklist">
+  <li>Conducted a multi-model sentiment analysis on a 1,000-comment sample due to compute constraints, benchmarking VADER (rule-based), TweetNLP, RoBERTa (Twitter-tuned transformer), and multilingual BERT (star-rating-based sentiment model) to compare classical vs neural approaches.</li>
+  <li><b>Model Agreement Insight</b>- Since no ground-truth labels were available, inter-model agreement between TweetNLP, RoBERTa, and BERT was used as a proxy for reliability, providing a consistency-based validation of sentiment predictions across transformer models.</li>
+  <li><b>Performance Tradeoff</b>- VADER was significantly faster and scalable to the full dataset, while transformer models (RoBERTa/BERT) were computationally expensive, justifying the use of sampling for neural sentiment evaluation on the 54K-comment corpus.</li>
+  <li><b>Primary Sentiment Model</b>- RoBERTa was selected as the main sentiment source for downstream analysis (word clouds, TF-IDF, and thematic breakdown) due to its strong performance on social-media-style text such as YouTube comments.</li>
+  <li><b>Sentiment Insight</b>- Positive sentiment was driven by terms like <span class="mono">love</span>, <span class="mono">amazing</span>, <span class="mono">masterpiece</span>, and <span class="mono">science</span>, indicating appreciation for both emotional storytelling and scientific depth of Interstellar.</li>
+  <li><b>Negative Sentiment Insight</b>- Negative comments were dominated by words such as <span class="mono">confusing</span>, <span class="mono">understand</span>, and <span class="mono">explain</span>, suggesting that audience criticism is primarily driven by plot complexity and conceptual difficulty rather than dislike of the film itself.</li>
+  <li><b>Key Insight</b>- An emotion classification layer was added on top of sentiment analysis, capturing finer-grained emotional responses (e.g., joy, surprise, fear), enabling a richer understanding of audience reactions beyond binary polarity.</li>
+  <li><b>Aspect-Based Sentiment (ABSA)</b>- A separate PyABSA pipeline was developed in an isolated environment to handle dependency conflicts and was scaled to the full dataset (~41K comments), extracting aspect-level sentiment such as <span class="mono">ending → negative</span> and <span class="mono">visuals → positive</span>, significantly increasing analytical granularity.</li>
+  <li><b>Data Integrity Check</b>- The final merged ABSA dataset (<span class="mono">absa_results_full.csv</span>) was validated for duplicates and consistency before analysis, ensuring reliable downstream interpretation of aspect frequency and sentiment distributions.</li>
+</ul>
+    <image-placeholder src="emo-dis.jpeg" caption="Chart: Emotion Distribution"></image-placeholder>
+    <image-placeholder src="vs-senti.jpeg" caption="Chart: Positive vs Negative Words"></image-placeholder>
+    <image-placeholder src="absa-senti.jpeg" caption="Screenshot: Dataset after ABSA sentiment analysis"></image-placeholder>`
+  },
+    ner: {
+    eyebrow:'YouTube Pipeline · Stage 05', title:'Named Entity Recognition',
+    body:`<p class="modal-lede">Conducted NER analysis for the comments dataset, discovering entities and their relationships.</p>
+    <ul class="blocklist">
+      <li>Used spacy, nlp = spacy.load("en_core_web_lg") for this analysis</li>
+      <li>From the Films/Works chart we discovered this book called The Science of Interstellar, which was later used as Source of data for the RAG pipeline</li>
+      <li><b>Key Insight</b>- Named Entity Recognition (NER) on 41,440 YouTube comments revealed that audiences engage deeply with Interstellar’s scientific concepts, characters, soundtrack, and philosophical themes. Frequent mentions of Cooper, Christopher Nolan, Kip Thorne, NASA, IMAX, black holes, and Hans Zimmer show that discussions extend far beyond simple movie reactions into science, emotion, and cinematic analysis.</li>
+      <li><b>Limitations & Findings</b>- While spaCy’semo-dis <span class="mono">en_core_web_lg</span> model successfully extracted major entities, it struggled with sci-fi-specific terminology and informal YouTube language. For example, “Gargantua” was incorrectly classified as a person instead of a location. Despite these limitations, the NER pipeline effectively validated the project’s core objective of capturing rich multi-dimensional audience discourse around Interstellar.</li>
+    </ul>
+    <image-placeholder src="int-people.png" caption="Chart: People mentioned in Interstellar Comments"></image-placeholder>
+    <image-placeholder src="int-orgs.png" caption="Chart: Organisations mentioned in Interstellar Comments"></image-placeholder>
+    <image-placeholder src="int-location.png" caption="Chart: Locations mentioned in Interstellar Comments"></image-placeholder>
+    <image-placeholder src="int-works.png" caption="Chart: Films/Works mentioned in Interstellar Comments"></image-placeholder>`
+  }
+};
+function openYtModal(key){
+  const c=YT_CONTENT[key];
+  document.getElementById('modal-eyebrow').textContent=c.eyebrow;
+  document.getElementById('modal-title').textContent=c.title;
+  document.getElementById('modal-body').innerHTML=c.body;
+  document.getElementById('modal-overlay').classList.add('active');
+  document.getElementById('modal-overlay').scrollTop = 0;
+}
+
+const ytStageDefs=[
+  {id:'ingestion', idx:'01', label:'Data Ingestion & Scraping'},
+  {id:'eda', idx:'02', label:'Exploratory Data Analysis'},
+  {id:'cleaning', idx:'03', label:'Data Cleaning'},
+  {id:'sentiment', idx:'04', label:'Sentiment Analysis'},
+  {id:'ner', idx:'05', label:'Named Entity Recognition'}
+];
+function buildYoutube(){
+  document.getElementById('yt-origin-slot').innerHTML = `
+    <div class="node-card hub" style="width:220px;height:220px;border-color:rgba(232,184,109,.5);" tabindex="0">
+      <span class="glyph">&#9658;</span>
+      <div class="nlabel display">YouTube Comments</div>
+      <div class="ntype mono">Origin Node</div>
+    </div>`;
+
+  document.getElementById('yt-stage-grid').innerHTML = ytStageDefs.map(n=>`
+    <div class="node-card stage" tabindex="0" onclick="openYtModal('${n.id}')" onkeydown="if(event.key==='Enter'){openYtModal('${n.id}')}">
+      <span class="nidx mono">${n.idx}</span>
+      <div class="nlabel display">${n.label}</div>
+    </div>`).join('');
+
+  document.getElementById('yt-output-slot').innerHTML = `
+    <div class="node-card source" style="cursor:default;width:300px;text-align:center;">
+      <div class="nring"></div>
+      <div class="nlabel display">&rarr; Embedding + Indexing</div>
+      <div class="ntype mono">Feeds Main RAG Core</div>
+      <div class="ndesc">Cleaned, scored comment chunks are embedded via OpenAI embeddings and merged into the shared index.</div>
+    </div>`;
+}
+buildYoutube();
+
+/* ===================== COMPARE TOGGLE ===================== */
+function setCompare(mode){
+  document.querySelectorAll('.toggle-btn').forEach(b=>b.classList.toggle('active', b.dataset.p===mode));
+  document.querySelectorAll('.compare-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('panel-'+mode).classList.add('active');
+}
+</script>
+</body>
+</html>
